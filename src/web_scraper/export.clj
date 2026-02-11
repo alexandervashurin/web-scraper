@@ -4,7 +4,7 @@
             [cheshire.core :as json]))
 
 (defn to-csv [filename data]
-;;  "Экспорт в CSV файл"
+  "Экспорт в CSV файл"
   (if (empty? data)
     (println "[Export] Нет данных для CSV.")
     (do
@@ -16,7 +16,7 @@
       (println (str "[Export] Данные сохранены в " filename)))))
 
 (defn to-json [filename data]
-  ;;"Экспорт в JSON файл с форматированием"
+  "Экспорт в JSON файл с форматированием"
   (if (empty? data)
     (println "[Export] Нет данных для JSON.")
     (do

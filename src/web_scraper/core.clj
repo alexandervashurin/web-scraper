@@ -1,49 +1,50 @@
 (ns web-scraper.core
-  (:require [web-scraper.db :as db]
-            [web-scraper.parser :as parser]
+  (:require [web-scraper.parser :as parser]
             [web-scraper.export :as export]
-            [web-scraper.python-bridge :as py]))
+            [clojure.string :as str]))
 
 (defn process-target [target]
-;;  "Оркестратор: выбирает парсер и сохраняет в БД"
+;;  "Парсит цель и возвращает результат (обрезаем пробелы из URL)"
   (let [{:keys [url type]} target
+        clean-url (str/trim url)
         result (case type
-                 :static (parser/fetch-static url)
-                 :dynamic (parser/fetch-dynamic url)
-                 :python (py/run-script "resources/scraper.py" url)
+                 :static (parser/fetch-static clean-url)
+                 :dynamic (parser/fetch-dynamic clean-url)
                  (do
                    (println (str "[Core] Неизвестный тип парсера: " type))
                    nil))]
     (when result
-      (db/insert-result! result))))
+      (assoc result :source clean-url)))) ; сохраняем очищенный URL
 
 (defn -main [& args]
   (println "============================================")
   (println "Запуск модульного системы парсинга...")
   (println "============================================")
 
-  ;; 1. Инициализация БД
-  (db/init-table!)
+  ;; Список целей для парсинга (с пробелами для теста обрезки)
+  (def targets [{:url "https://nweb42.com/books/clojure/ " :type :static}
+                {:url "https://nweb42.com/books/clojure/ " :type :dynamic}])
 
-  ;; 2. Список целей для парсинга
-  (def targets [{:url "https://nweb42.com/books/" :type :static}
-                {:url "https://nweb42.com/books/" :type :dynamic}
-                {:url "https://nweb42.com/books/" :type :python}
-                ])
-
-  ;; 3. Цикл обработки
+  ;; Цикл обработки
   (println "\n[START] Обработка URL:")
-  (doseq [target targets]
-    (println (str "  -> Обработка: " (:url target) " (" (name (:type target)) ")"))
-    (process-target target))
+  (let [results (atom [])]
+    (doseq [target targets]
+      (println (str "  -> Обработка: '" (:url target) "' (" (name (:type target)) ")"))
+      (let [result (process-target target)]
+        (if result
+          (do
+            (swap! results conj result)
+            (println (str "     ✓ Успешно: " (subs (:title result) 0 (min 50 (count (:title result)))) "...")))
+          (println "     ✗ Ошибка: не удалось извлечь данные"))))
 
-  ;; 4. Экспорт результатов
-  (println "\n[START] Экспорт данных:")
-  (let [all-data (db/fetch-all-results)]
-    (if (seq all-data)
+    ;; Экспорт результатов
+    (println "\n[START] Экспорт данных:")
+    (if (seq @results)
       (do
-        (export/to-csv "results.csv" all-data)
-        (export/to-json "results.json" all-data))
+        (export/to-csv "results.csv" @results)
+        (export/to-json "results.json" @results)
+        (println (str "\n✅ Успешно обработано " (count @results) " URL(ов)"))
+        (println "📁 Результаты сохранены в results.csv и results.json"))
       (println "[Export] Нет данных для экспорта.")))
 
   (println "============================================")
