@@ -1,0 +1,8 @@
+[{:url "https://example.com"
+  :type :static
+  :selectors {:title :h1 :content :p}} ;; Селекторы по умолчанию
+
+ {:url "https://special-site.com"
+  :type :static
+  :selectors {:title [:h2.special] :content [:div.text]}} ;; Особые селекторы
+ ]
