@@ -1,8 +1,0 @@
-[{:url "https://timothygu.me/"
-  :type :static
-  :selectors {:title :h1 :content :p}} ;; Селекторы по умолчанию
-
- {:url "https://2ch.org"
-  :type :dynamic
-  :selectors {:title [:h2.special] :content [:div.text]}} ;; Особые селекторы
- ]

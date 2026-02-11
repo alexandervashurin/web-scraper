@@ -2,46 +2,49 @@
   (:require [web-scraper.db :as db]
             [web-scraper.parser :as parser]
             [web-scraper.export :as export]
-            [web-scraper.python-bridge :as py]
-            [web-scraper.config :as config])) ;; <-- Подключаем модуль конфига
+            [web-scraper.python-bridge :as py]))
 
 (defn process-target [target]
-  ;"Оркестратор: выбирает парсер и сохраняет в БД"
+;;  "Оркестратор: выбирает парсер и сохраняет в БД"
   (let [{:keys [url type]} target
         result (case type
                  :static (parser/fetch-static url)
                  :dynamic (parser/fetch-dynamic url)
                  :python (py/run-script "resources/scraper.py" url)
-                 nil)]
+                 (do
+                   (println (str "[Core] Неизвестный тип парсера: " type))
+                   nil))]
     (when result
       (db/insert-result! result))))
 
 (defn -main [& args]
   (println "============================================")
-  (println "Запуск модульной системы парсинга...")
+  (println "Запуск модульного системы парсинга...")
   (println "============================================")
 
   ;; 1. Инициализация БД
   (db/init-table!)
 
-  ;; 2. Загрузка целей из внешнего файла
-  (println "\n[Config] Загрузка целей...")
-  (def targets (config/load-targets))
+  ;; 2. Список целей для парсинга
+  (def targets [{:url "https://nweb42.com/books/" :type :static}
+                {:url "https://nweb42.com/books/" :type :dynamic}
+                {:url "https://nweb42.com/books/" :type :python}
+                ])
 
-  (if (empty? targets)
-    (println "[Config] Список целей пуст. Проверьте resources/targets.edn")
-    (do
-      ;; 3. Цикл обработки
-      (println (str "[Start] Найдено целей для обработки: " (count targets)))
-      (doseq [target targets]
-        (println (str "  -> " (:url target) " [" (:type target) "]"))
-        (process-target target))
+  ;; 3. Цикл обработки
+  (println "\n[START] Обработка URL:")
+  (doseq [target targets]
+    (println (str "  -> Обработка: " (:url target) " (" (name (:type target)) ")"))
+    (process-target target))
 
-      ;; 4. Экспорт результатов
-      (println "\n[Export] Сохранение данных...")
-      (let [all-data (db/fetch-all-results)]
+  ;; 4. Экспорт результатов
+  (println "\n[START] Экспорт данных:")
+  (let [all-data (db/fetch-all-results)]
+    (if (seq all-data)
+      (do
         (export/to-csv "results.csv" all-data)
-        (export/to-json "results.json" all-data))))
+        (export/to-json "results.json" all-data))
+      (println "[Export] Нет данных для экспорта.")))
 
   (println "============================================")
   (println "Работа завершена.")
