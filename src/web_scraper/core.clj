@@ -4,7 +4,7 @@
             [clojure.string :as str]))
 
 (defn process-target [target]
-;;  "Парсит цель и возвращает результат (обрезаем пробелы из URL)"
+  "Парсит цель и возвращает результат"
   (let [{:keys [url type]} target
         clean-url (str/trim url)
         result (case type
@@ -20,25 +20,29 @@
   (println "============================================")
   (println "Запуск модульного системы парсинга...")
   (println "============================================")
-
+  
   ;; Список целей для парсинга (с пробелами для теста обрезки)
-  (def targets [{:url "https://nweb42.com/books/clojure/ " :type :static}
-                {:url "https://nweb42.com/books/clojure/ " :type :dynamic}])
-
+  (def targets [{:url "https://example.com " :type :static}
+                {:url " https://example.com" :type :dynamic}
+                {:url "https://nweb42.com/books/clojure/  " :type :static}
+                {:url " https://nweb42.com/books/clojure/" :type :dynamic}])
+  
   ;; Цикл обработки
   (println "\n[START] Обработка URL:")
   (let [results (atom [])]
     (doseq [target targets]
-      (println (str "  -> Обработка: '" (:url target) "' (" (name (:type target)) ")"))
+      (println (str "\n  -> " (name (:type target)) ": '" (:url target) "'"))
       (let [result (process-target target)]
         (if result
           (do
             (swap! results conj result)
-            (println (str "     ✓ Успешно: " (subs (:title result) 0 (min 50 (count (:title result)))) "...")))
-          (println "     ✗ Ошибка: не удалось извлечь данные"))))
-
+            (println (str "     ✓ Успешно"))
+            (println (str "       Заголовок: " (subs (:title result) 0 (min 60 (count (:title result)))))))
+          (println "     ✗ Не удалось извлечь данные"))))
+    
     ;; Экспорт результатов
-    (println "\n[START] Экспорт данных:")
+    (println "\n============================================")
+    (println "[START] Экспорт данных:")
     (if (seq @results)
       (do
         (export/to-csv "results.csv" @results)
@@ -46,7 +50,7 @@
         (println (str "\n✅ Успешно обработано " (count @results) " URL(ов)"))
         (println "📁 Результаты сохранены в results.csv и results.json"))
       (println "[Export] Нет данных для экспорта.")))
-
+  
   (println "============================================")
   (println "Работа завершена.")
   (println "============================================"))
