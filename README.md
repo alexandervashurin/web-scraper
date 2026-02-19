@@ -166,5 +166,5 @@ MIT License
 
 ---
 
-**Автор:** a.vashurin@PSO.LOCAL  
+**Автор:** alexandervashurin@yandex.ru
 **Версия:** 0.1.0-SNAPSHOT
