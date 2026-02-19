@@ -13,3 +13,17 @@ pom.xml.asc
 .nrepl-port
 .cpcache/
 .cli-kondo/
+
+# Результаты парсинга
+results.csv
+results.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+*.iml

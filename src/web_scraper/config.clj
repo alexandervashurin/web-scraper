@@ -2,10 +2,11 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]))
 
-(def config-file "resources/targets.edn")
+(def ^:private config-file "resources/targets.edn")
 
-(defn load-targets []
- ; "Читает список целей из EDN файла"
+(defn load-targets
+  "Читает список целей из EDN файла"
+  []
   (if (.exists (io/file config-file))
     (try
       (edn/read-string (slurp config-file))

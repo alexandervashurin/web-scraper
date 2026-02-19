@@ -5,6 +5,8 @@
             [etaoin.api :as e]
             [clojure.string :as str]))
 
+(def ^:private ^:const timeout-ms 10000)
+
 ;; Вспомогательная функция: конвертирует любой контент в строку
 (defn- content-to-string [content]
   (cond
@@ -17,7 +19,7 @@
 ;; Улучшенная функция извлечения
 (defn- extract-from-html [body]
   (let [parsed (hickory/as-hickory (hickory/parse body))
-        
+
         ;; Заголовок: пробуем разные варианты
         h1-nodes (hs/select (hs/tag :h1) parsed)
         h2-nodes (hs/select (hs/tag :h2) parsed)
@@ -25,14 +27,14 @@
         title (if title-node
                 (-> title-node :content content-to-string str/trim)
                 "N/A")
-        
+
         ;; Контент: собираем все абзацы
         p-nodes (hs/select (hs/tag :p) parsed)
         paragraphs (map #(-> % :content content-to-string str/trim) p-nodes)
         content (if (seq paragraphs)
-                  (str/join "\n\n" (filter seq? paragraphs))
+                  (str/join "\n\n" (filter not-empty paragraphs))
                   "N/A")]
-    
+
     {:title title
      :content content}))
 
@@ -40,16 +42,16 @@
   "Парсинг без исполнения JS"
   (try
     (println (str "   [HTTP] Запрос: " url))
-    (let [{:keys [status body]} (http/get url {:accept-encoding ["gzip" "deflate"] 
+    (let [{:keys [status body]} (http/get url {:accept-encoding ["gzip" "deflate"]
                                                 :throw-exceptions false
-                                                :timeout 10000})]
+                                                :timeout timeout-ms})]
       (if (= 200 status)
         (let [data (extract-from-html body)]
           (println (str "   ✓ Заголовок: " (subs (:title data) 0 (min 40 (count (:title data)))) "..."))
           {:source url
            :type "static"
-           :title (or (:title data) "N/A")
-           :content (or (:content data) "N/A")})
+           :title (:title data "N/A")
+           :content (:content data "N/A")})
         (do
           (println (str "   ✗ HTTP " status))
           nil)))
@@ -59,27 +61,32 @@
 
 (defn fetch-dynamic [url]
   "Парсинг с исполнением JS (требуется chromedriver)"
-  (try
-    (println (str "   [браузер] Открываем: " url))
-    (let [driver (e/chrome {:args ["--headless" "--no-sandbox" "--disable-dev-shm-usage"]})]
-      (e/go driver url)
-      
+  (let [driver (atom nil)]
+    (try
+      (println (str "   [браузер] Открываем: " url))
+      (reset! driver (e/chrome {:args ["--headless" "--no-sandbox" "--disable-dev-shm-usage"]}))
+      (e/go @driver url)
+
       ;; Пробуем разные селекторы для заголовка
-      (let [title-el (or (first (e/query driver [:tag :h1]))
-                         (first (e/query driver [:tag :h2]))
-                         (first (e/query driver [:tag :title])))
+      (let [title-el (or (first (e/query @driver [:tag :h1]))
+                         (first (e/query @driver [:tag :h2]))
+                         (first (e/query @driver [:tag :title])))
             ;; Контент: пробуем разные варианты
-            content-el (or (first (e/query driver [:tag :p]))
-                           (first (e/query driver [:class "content"]))
-                           (first (e/query driver [:class "main"])))
-            title (when title-el (e/get-element-text-el driver title-el))
-            content (when content-el (e/get-element-text-el driver content-el))]
-        (e/quit driver)
-        (println (str "   ✓ Заголовок: " (subs (or title "N/A") 0 (min 40 (count (or title "N/A")))) "..."))
+            content-el (or (first (e/query @driver [:tag :p]))
+                           (first (e/query @driver [:class "content"]))
+                           (first (e/query @driver [:class "main"])))
+            title (when title-el (e/get-element-text-el @driver title-el))
+            content (when content-el (e/get-element-text-el @driver content-el))]
         {:source url
          :type "dynamic"
          :title (or (str/trim (str title)) "N/A")
-         :content (or (str/trim (str content)) "N/A")}))
-    (catch Exception e
-      (println (str "   ✗ Ошибка: " (.getMessage e)))
-      nil)))
+         :content (or (str/trim (str content)) "N/A")})
+      (catch Exception e
+        (println (str "   ✗ Ошибка: " (.getMessage e)))
+        nil)
+      (finally
+        (when @driver
+          (try
+            (e/quit @driver)
+            (catch Exception _
+              (println "   [Warning] Не удалось закрыть драйвер"))))))))
