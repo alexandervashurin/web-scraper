@@ -1,0 +1,2 @@
+[{:url "https://example.com" :type :static}
+ {:url "https://nweb42.com/books/clojure/" :type :static}]

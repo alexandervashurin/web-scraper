@@ -7,15 +7,6 @@
 
 (def ^:private ^:const timeout-ms 10000)
 
-;; Вспомогательная функция: конвертирует любой контент в строку
-(defn- content-to-string [content]
-  (cond
-    (nil? content) ""
-    (string? content) content
-    (char? content) (str content)
-    (sequential? content) (apply str (map content-to-string content))
-    :else (str content)))
-
 ;; Улучшенная функция извлечения
 (defn- extract-from-html [body]
   (let [parsed (hickory/as-hickory (hickory/parse body))
@@ -25,14 +16,16 @@
         h2-nodes (hs/select (hs/tag :h2) parsed)
         title-node (or (first h1-nodes) (first h2-nodes))
         title (if title-node
-                (-> title-node :content content-to-string str/trim)
+                (-> title-node :content first str str/trim)
                 "N/A")
 
         ;; Контент: собираем все абзацы
         p-nodes (hs/select (hs/tag :p) parsed)
-        paragraphs (map #(-> % :content content-to-string str/trim) p-nodes)
+        paragraphs (keep #(when-let [text (-> % :content first)]
+                            (when (string? text)
+                              (str/trim text))) p-nodes)
         content (if (seq paragraphs)
-                  (str/join "\n\n" (filter not-empty paragraphs))
+                  (str/join "\n\n" paragraphs)
                   "N/A")]
 
     {:title title
@@ -66,21 +59,23 @@
       (println (str "   [браузер] Открываем: " url))
       (reset! driver (e/chrome {:args ["--headless" "--no-sandbox" "--disable-dev-shm-usage"]}))
       (e/go @driver url)
+      (e/wait @driver 5)  ;; Ждём загрузки страницы
 
-      ;; Пробуем разные селекторы для заголовка
-      (let [title-el (or (first (e/query @driver [:tag :h1]))
-                         (first (e/query @driver [:tag :h2]))
-                         (first (e/query @driver [:tag :title])))
-            ;; Контент: пробуем разные варианты
-            content-el (or (first (e/query @driver [:tag :p]))
-                           (first (e/query @driver [:class "content"]))
-                           (first (e/query @driver [:class "main"])))
-            title (when title-el (e/get-element-text-el @driver title-el))
-            content (when content-el (e/get-element-text-el @driver content-el))]
+      ;; Извлекаем текст через get-element-text
+      (let [h1-el (e/query @driver "h1")
+            h2-el (e/query @driver "h2")
+            p-els (e/query @driver "p")
+            title (cond
+                    (seq h1-el) (e/get-element-text @driver (first h1-el))
+                    (seq h2-el) (e/get-element-text @driver (first h2-el))
+                    :else "N/A")
+            content (if (and p-els (seq p-els))
+                      (e/get-element-text @driver (first p-els))
+                      "N/A")]
         {:source url
          :type "dynamic"
-         :title (or (str/trim (str title)) "N/A")
-         :content (or (str/trim (str content)) "N/A")})
+         :title (str/trim (str title))
+         :content (str/trim (str content))})
       (catch Exception e
         (println (str "   ✗ Ошибка: " (.getMessage e)))
         nil)
